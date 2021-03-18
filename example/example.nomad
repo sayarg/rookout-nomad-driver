@@ -26,8 +26,7 @@ job "example" {
 
       config {
         class     = "rookout.examples.HelloWorld"
-        classpath = "/local/hello-world.jar"
-        //classpath = "/Users/guy/dev/rookout/nomad-rookout/hello-world.jar"
+        class_path = "/local/hello-world.jar"
       }
     }
   }
