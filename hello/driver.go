@@ -95,9 +95,13 @@ var (
 		//       }
 		//     }
 		//   }
-		"greeting": hclspec.NewDefault(
-			hclspec.NewAttr("greeting", "string", false),
-			hclspec.NewLiteral(`"Hello, World!"`),
+		"class": hclspec.NewDefault(
+			hclspec.NewAttr("class", "string", false),
+			hclspec.NewLiteral(`"no class"`),
+		),
+		"classpath": hclspec.NewDefault(
+			hclspec.NewAttr("classpath", "string", false),
+			hclspec.NewLiteral(`"no class"`),
 		),
 	})
 
@@ -132,7 +136,8 @@ type TaskConfig struct {
 	// This struct is the decoded version of the schema defined in the
 	// taskConfigSpec variable above. It's used to convert the string
 	// configuration for the task into Go contructs.
-	Greeting string `codec:"greeting"`
+	Class     string `codec:"class"`
+	Classpath string `codec:"classpath"`
 }
 
 // TaskState is the runtime state which is encoded in the handle returned to
@@ -376,10 +381,23 @@ func (d *HelloDriverPlugin) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHan
 		return nil, nil, fmt.Errorf("failed to create executor: %v", err)
 	}
 
-	echoCmd := fmt.Sprintf(`echo "%s"`, driverConfig.Greeting)
+	//absPath, err := GetAbsolutePath("java")
+	absPath := "/usr/bin/java"
+
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to find java binary: %s", err)
+	}
+
+	//var cmd string = "/Library/Java/JavaVirtualMachines/jdk1.8.0_281.jdk/Contents/Home/bin/java"
+
+	token := "e1ec25f55757833d8c7c1a0483aff01184e635d53a1acd6be6f839fe97525d90"
+	args := []string{}
+	args = append(args, "-javaagent:/local/rook.jar", "-DROOKOUT_TOKEN="+token)
+	args = append(args, "-cp", driverConfig.Classpath, driverConfig.Class)
+
 	execCmd := &executor.ExecCommand{
-		Cmd:        d.config.Shell,
-		Args:       []string{"-c", echoCmd},
+		Cmd:        absPath,
+		Args:       args,
 		StdoutPath: cfg.StdoutPath,
 		StderrPath: cfg.StderrPath,
 	}
@@ -636,4 +654,15 @@ func (d *HelloDriverPlugin) SignalTask(taskID string, signal string) error {
 func (d *HelloDriverPlugin) ExecTask(taskID string, cmd []string, timeout time.Duration) (*drivers.ExecTaskResult, error) {
 	// TODO: implement driver specific logic to execute commands in a task.
 	return nil, fmt.Errorf("This driver does not support exec")
+}
+
+// GetAbsolutePath returns the absolute path of the passed binary by resolving
+// it in the path and following symlinks.
+func GetAbsolutePath(bin string) (string, error) {
+	lp, err := exec.LookPath(bin)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve path to %q executable: %v", bin, err)
+	}
+
+	return filepath.EvalSymlinks(lp)
 }
