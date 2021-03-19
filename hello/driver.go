@@ -25,7 +25,7 @@ import (
 
 const (
 	// pluginName is the name of the plugin
-	pluginName = "hello-world-example"
+	pluginName = "java-rookout"
 
 	// fingerprintPeriod is the interval at which the driver will send fingerprint responses
 	fingerprintPeriod = 30 * time.Second
@@ -517,7 +517,8 @@ func javaCmdArgs(driverConfig TaskConfig) []string {
 
 	token := "e1ec25f55757833d8c7c1a0483aff01184e635d53a1acd6be6f839fe97525d90"
 
-	args = append(args, "-javaagent:/local/rook.jar", "-DROOKOUT_TOKEN="+token)
+	//args = append(args, "-javaagent:/local/rook.jar", "-DROOKOUT_TOKEN="+token)
+	args = append(args, "-javaagent:/rookout/rook-0.1.160.jar", "-DROOKOUT_TOKEN="+token)
 	//args = append(args, "-cp", driverConfig.Classpath, driverConfig.Class)
 
 	// Look for jvm options
