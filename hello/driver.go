@@ -3,6 +3,8 @@ package hello
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -416,7 +418,13 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		return nil, nil, fmt.Errorf("failed to find java binary: %s", err)
 	}
 
-	args := javaCmdArgs(driverConfig)
+	rookoutJarPath, err := d.downloadRookoutJarIfNeeded(cfg)
+
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to download rookout jar: %s", err)
+	}
+
+	args := d.javaCmdArgs(driverConfig, rookoutJarPath)
 
 	d.logger.Info("starting java task", "driver_cfg", hclog.Fmt("%+v", driverConfig), "args", args)
 
@@ -510,16 +518,79 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	return handle, nil, nil
 }
 
-func javaCmdArgs(driverConfig TaskConfig) []string {
-	args := []string{}
+func (d *Driver) downloadRookoutJarIfNeeded(cfg *drivers.TaskConfig) (string, error) {
 
-	//var cmd string = "/Library/Java/JavaVirtualMachines/jdk1.8.0_281.jdk/Contents/Home/bin/java"
+	rookoutJarLocalPath := "/local/rook-0.1.160.jar"
+	jarPath := cfg.TaskDir().Dir + rookoutJarLocalPath
+
+	d.logger.Info("checking for rookout jar at", "jar-path", jarPath)
+
+	if _, err := os.Stat(jarPath); err == nil {
+		// path/to/whatever exists
+		d.logger.Info("jar already downloaded at", "jar-path", jarPath)
+
+		return rookoutJarLocalPath, nil
+
+	} else if os.IsNotExist(err) {
+		// path/to/whatever does *not* exist
+		d.logger.Info("jar not found, downloading...")
+
+		specUrl := "https://repository.sonatype.org/service/local/repositories/central-proxy/content/com/rookout/rook/0.1.160/rook-0.1.160.jar"
+		resp, err := http.Get(specUrl)
+
+		if err != nil {
+			d.logger.Error("err", err)
+		}
+
+		defer resp.Body.Close()
+		d.logger.Info("status", resp.Status)
+
+		if resp.StatusCode != 200 {
+			return "", fmt.Errorf("failed to download rookout jar, error: %s", resp.Body)
+		}
+
+		//err = os.MkdirAll("/local", 0755)
+
+		//if err != nil {
+		//	d.logger.Error("err creating dir", err)
+		//}
+
+		// Create the file
+		out, err := os.Create(jarPath)
+
+		if err != nil {
+			d.logger.Error("err creating file", err)
+		}
+		d.logger.Info("file", "file", out)
+
+		defer out.Close()
+
+		// Write the body to file
+		_, err = io.Copy(out, resp.Body)
+
+		if err != nil {
+			d.logger.Error("err", err)
+		}
+
+		return rookoutJarLocalPath, nil
+
+	} else {
+		// Schrodinger: file may or may not exist. See err for details.
+
+		// Therefore, do *NOT* use !os.IsNotExist(err) to test for file existence
+		return "", fmt.Errorf("unable to determine whether rookout jar exists on path %s", jarPath)
+	}
+}
+
+func (d *Driver) javaCmdArgs(driverConfig TaskConfig, rookoutJarPath string) []string {
+
+	d.logger.Info("using rookout jar from", "jar-path", rookoutJarPath)
+
+	args := []string{}
 
 	token := "e1ec25f55757833d8c7c1a0483aff01184e635d53a1acd6be6f839fe97525d90"
 
-	//args = append(args, "-javaagent:/local/rook.jar", "-DROOKOUT_TOKEN="+token)
-	args = append(args, "-javaagent:/rookout/rook-0.1.160.jar", "-DROOKOUT_TOKEN="+token)
-	//args = append(args, "-cp", driverConfig.Classpath, driverConfig.Class)
+	args = append(args, "-javaagent:"+rookoutJarPath, "-DROOKOUT_TOKEN="+token)
 
 	// Look for jvm options
 	if len(driverConfig.JvmOpts) != 0 {
