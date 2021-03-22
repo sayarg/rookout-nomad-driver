@@ -1,0 +1,15 @@
+
+vagrant up
+
+/etc/nomad.d/vagrant1.hcl
+
+/opt/nomad/serverdata/plugins
+
+sudo systemctl stop nomad
+
+sudo snap install go --classic
+sudo apt-get install build-essential 
+
+go build -o java-rookout-driver .
+
+sudo systemctl start nomad
